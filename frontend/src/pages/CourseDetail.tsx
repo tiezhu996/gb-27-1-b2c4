@@ -1,13 +1,21 @@
-import { Row, Col, Card, Typography, Tag, Button, Space, Descriptions, List, Avatar, message, Modal } from 'antd';
-import { PlayCircleOutlined, BookOutlined, EditOutlined } from '@ant-design/icons';
+import { Row, Col, Card, Typography, Tag, Button, Space, Descriptions, List, Avatar, message, Modal, Progress } from 'antd';
+import { PlayCircleOutlined, BookOutlined, EditOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { courseApi } from '@/api/course';
-import { Course, CourseType, CourseLesson } from '@/types/course';
+import { Course, CourseType, CourseLesson, CourseProgress, LessonProgress } from '@/types/course';
 import { useAuthStore } from '@/store/auth';
 import { UserRole } from '@/types/user';
+import LessonPlayer from '@/components/LessonPlayer';
 
 const { Title, Text, Paragraph } = Typography;
+
+// 秒格式化为 mm:ss
+const formatPosition = (seconds: number) => {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
 
 export default function CourseDetail() {
   const { id } = useParams();
@@ -15,7 +23,14 @@ export default function CourseDetail() {
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [enrolled, setEnrolled] = useState(false);
+  const [courseProgress, setCourseProgress] = useState<CourseProgress | null>(null);
+  const [playingLesson, setPlayingLesson] = useState<CourseLesson | null>(null);
+  const [playerOpen, setPlayerOpen] = useState(false);
   const { user, isAuthenticated } = useAuthStore();
+
+  const isStudent = user?.role === UserRole.STUDENT;
+  // 仅已选课的学生展示与学习进度相关的信息
+  const showLearningProgress = isStudent && enrolled;
 
   useEffect(() => {
     if (id) {
@@ -31,10 +46,24 @@ export default function CourseDetail() {
       setCourse(data);
       if (isAuthenticated) {
         const enrollment = await courseApi.getEnrollment(id);
-        setEnrolled(!!enrollment);
+        const isEnrolled = !!enrollment;
+        setEnrolled(isEnrolled);
+        if (isEnrolled && user?.role === UserRole.STUDENT) {
+          await loadProgress();
+        }
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadProgress = async () => {
+    if (!id) return;
+    try {
+      const progress = await courseApi.getCourseProgress(id);
+      setCourseProgress(progress);
+    } catch {
+      // 进度加载失败不影响课程详情展示
     }
   };
 
@@ -45,7 +74,7 @@ export default function CourseDetail() {
       return;
     }
     if (!id) return;
-    
+
     Modal.confirm({
       title: '确认报名',
       content: course?.type === CourseType.PAID
@@ -56,6 +85,9 @@ export default function CourseDetail() {
           await courseApi.enroll(id);
           setEnrolled(true);
           message.success('报名成功');
+          if (user?.role === UserRole.STUDENT) {
+            loadProgress();
+          }
         } catch (error: any) {
           message.error(error.response?.data?.message || '报名失败');
         }
@@ -67,10 +99,26 @@ export default function CourseDetail() {
     if (lesson.isLive) {
       navigate(`/live/${lesson.id}`);
     } else if (lesson.videoUrl) {
-      message.info('播放视频');
+      if (showLearningProgress) {
+        setPlayingLesson(lesson);
+        setPlayerOpen(true);
+      } else {
+        message.info('播放视频');
+      }
     } else {
       message.info('暂无视频');
     }
+  };
+
+  const handlePlayerClose = () => {
+    setPlayerOpen(false);
+    setPlayingLesson(null);
+    // 播放结束后回读最新进度，刷新每课时进度与课程进度
+    loadProgress();
+  };
+
+  const getLessonProgress = (lessonId: string): LessonProgress | undefined => {
+    return courseProgress?.lessons.find((p) => p.lessonId === lessonId);
   };
 
   if (loading) {
@@ -140,6 +188,17 @@ export default function CourseDetail() {
                     </Button>
                   )}
                 </div>
+                {showLearningProgress && courseProgress && (
+                  <div style={{ marginTop: 16 }}>
+                    <Space style={{ marginBottom: 4 }}>
+                      <Text strong>课程进度</Text>
+                      <Text type="secondary">
+                        已完成 {courseProgress.completedLessons}/{courseProgress.totalLessons} 课时
+                      </Text>
+                    </Space>
+                    <Progress percent={Math.round(courseProgress.courseProgress)} size="small" />
+                  </div>
+                )}
               </Col>
             </Row>
           </Card>
@@ -165,40 +224,77 @@ export default function CourseDetail() {
           itemLayout="horizontal"
           dataSource={course.lessons || []}
           locale={{ emptyText: '暂无课时' }}
-          renderItem={(lesson, index) => (
-            <List.Item
-              actions={
-                enrolled || isTeacher
-                  ? [
-                      <Button
-                        type="link"
-                        icon={<PlayCircleOutlined />}
-                        onClick={() => handlePlayLesson(lesson)}
-                      >
-                        {lesson.isLive ? '进入直播' : '观看视频'}
-                      </Button>,
-                    ]
-                  : []
-              }
-            >
-              <List.Item.Meta
-                avatar={
-                  <Avatar style={{ background: '#1890ff' }}>
-                    {index + 1}
-                  </Avatar>
+          renderItem={(lesson, index) => {
+            const lessonProgress = getLessonProgress(lesson.id);
+            const percent = lessonProgress
+              ? lessonProgress.completed
+                ? 100
+                : lessonProgress.duration > 0
+                  ? Math.round((lessonProgress.position / lessonProgress.duration) * 100)
+                  : 0
+              : 0;
+            return (
+              <List.Item
+                actions={
+                  enrolled || isTeacher
+                    ? [
+                        <Button
+                          type="link"
+                          icon={<PlayCircleOutlined />}
+                          onClick={() => handlePlayLesson(lesson)}
+                        >
+                          {lesson.isLive ? '进入直播' : '观看视频'}
+                        </Button>,
+                      ]
+                    : []
                 }
-                title={
-                  <Space>
-                    {lesson.title}
-                    {lesson.isLive && <Tag color="red">直播</Tag>}
-                  </Space>
-                }
-                description={`${lesson.duration} 分钟`}
-              />
-            </List.Item>
-          )}
+              >
+                <List.Item.Meta
+                  avatar={
+                    <Avatar style={{ background: '#1890ff' }}>
+                      {index + 1}
+                    </Avatar>
+                  }
+                  title={
+                    <Space>
+                      {lesson.title}
+                      {lesson.isLive && <Tag color="red">直播</Tag>}
+                      {showLearningProgress && lessonProgress?.completed && (
+                        <Tag icon={<CheckCircleOutlined />} color="success">已完成</Tag>
+                      )}
+                    </Space>
+                  }
+                  description={
+                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                      <Text type="secondary">{lesson.duration} 分钟</Text>
+                      {showLearningProgress && !lesson.isLive && (
+                        <>
+                          <Progress percent={percent} size="small" style={{ maxWidth: 320 }} />
+                          {lessonProgress && lessonProgress.position > 0 && !lessonProgress.completed && (
+                            <Text type="secondary">
+                              续播至 {formatPosition(lessonProgress.position)}
+                            </Text>
+                          )}
+                        </>
+                      )}
+                    </Space>
+                  }
+                />
+              </List.Item>
+            );
+          }}
         />
       </Card>
+
+      {playingLesson && (
+        <LessonPlayer
+          courseId={course.id}
+          lesson={playingLesson}
+          initialPosition={getLessonProgress(playingLesson.id)?.position || 0}
+          open={playerOpen}
+          onClose={handlePlayerClose}
+        />
+      )}
     </div>
   );
 }

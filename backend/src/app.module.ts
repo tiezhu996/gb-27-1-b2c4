@@ -8,6 +8,7 @@ import { LiveClassesModule } from './modules/live-classes/live-classes.module';
 import { AssignmentsModule } from './modules/assignments/assignments.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
+import { ProgressModule } from './modules/progress/progress.module';
 import { ChatGateway } from './gateways/chat.gateway';
 
 @Module({
@@ -36,6 +37,7 @@ import { ChatGateway } from './gateways/chat.gateway';
     AssignmentsModule,
     AttendanceModule,
     StatisticsModule,
+    ProgressModule,
   ],
   providers: [ChatGateway],
 })

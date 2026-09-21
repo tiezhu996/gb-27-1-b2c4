@@ -51,3 +51,18 @@ export interface CourseEnrollment {
   enrolledAt?: Date;
   course?: Course;
 }
+
+export interface LessonProgress {
+  lessonId: string;
+  position: number;
+  duration: number;
+  completed: boolean;
+  completedAt?: Date;
+}
+
+export interface CourseProgress {
+  courseProgress: number;
+  completedLessons: number;
+  totalLessons: number;
+  lessons: LessonProgress[];
+}

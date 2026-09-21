@@ -8,6 +8,7 @@
 - **课程管理**：教师可创建课程（含封面、简介、定价、课时列表），支持免费/付费课、按分类标签检索
 - **直播授课**：实时直播课堂，支持屏幕共享、电子白板、课件展示、弹幕互动、举手发言
 - **录播回放**：直播结束自动生成录播，支持倍速播放（0.5x-2.0x）和进度条拖拽
+- **断点续播与课时完成**：已选课学生观看录播自动记录最远播放位置，刷新后从断点继续；播放达 95% 自动标记课时完成并按已完成课时重算课程进度
 - **课堂签到与考勤**：直播过程发起签到，自动生成考勤报表，支持导出 Excel
 - **作业系统**：教师布置作业（文本/选择/附件），学生在线提交，教师批改评分
 - **学习数据统计**：教师和学生数据看板，销量、出勤率、作业完成率、学习时长等
@@ -85,7 +86,7 @@ npm run start:dev
 ├── frontend/                    # 前端项目
 │   ├── src/
 │   │   ├── api/                 # API 请求
-│   │   ├── components/          # 公共组件
+│   │   ├── components/          # 公共组件（含 LessonPlayer 录播播放器）
 │   │   ├── pages/               # 页面组件
 │   │   │   ├── Home.tsx         # 首页
 │   │   │   ├── Login.tsx        # 登录
@@ -116,6 +117,7 @@ npm run start:dev
 │   │   │       ├── course.entity.ts
 │   │   │       ├── course-lesson.entity.ts
 │   │   │       ├── course-enrollment.entity.ts
+│   │   │       ├── lesson-progress.entity.ts
 │   │   │       ├── live-class.entity.ts
 │   │   │       ├── assignment.entity.ts
 │   │   │       ├── assignment-submission.entity.ts
@@ -124,6 +126,7 @@ npm run start:dev
 │   │   │   ├── auth/            # 认证模块
 │   │   │   ├── users/           # 用户模块
 │   │   │   ├── courses/         # 课程模块
+│   │   │   ├── progress/        # 录播学习进度模块（断点续播、课时完成）
 │   │   │   ├── live-classes/    # 直播模块
 │   │   │   ├── assignments/     # 作业模块
 │   │   │   ├── attendance/      # 考勤模块

@@ -51,3 +51,25 @@ export interface CourseEnrollment {
   enrolledAt?: Date;
   course?: Course;
 }
+
+export interface LessonProgress {
+  id?: string;
+  lessonId: string;
+  isLive?: boolean;
+  /** 最远有效播放位置（秒） */
+  position: number;
+  /** 课时媒体总时长（秒） */
+  duration: number;
+  completed: boolean;
+  completedAt?: Date | null;
+  updatedAt?: Date | null;
+}
+
+export interface CourseProgress {
+  enrollment: {
+    id: string;
+    progress: number;
+    status: string;
+  };
+  lessons: LessonProgress[];
+}

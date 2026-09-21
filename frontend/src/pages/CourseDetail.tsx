@@ -1,9 +1,9 @@
-import { Row, Col, Card, Typography, Tag, Button, Space, Descriptions, List, Avatar, message, Modal } from 'antd';
-import { PlayCircleOutlined, BookOutlined, EditOutlined } from '@ant-design/icons';
+import { Row, Col, Card, Typography, Tag, Button, Space, Descriptions, List, Avatar, message, Modal, Progress } from 'antd';
+import { PlayCircleOutlined, BookOutlined, EditOutlined, CheckCircleFilled } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { courseApi } from '@/api/course';
-import { Course, CourseType, CourseLesson } from '@/types/course';
+import { Course, CourseType, CourseLesson, CourseProgress } from '@/types/course';
 import { useAuthStore } from '@/store/auth';
 import { UserRole } from '@/types/user';
 
@@ -15,6 +15,7 @@ export default function CourseDetail() {
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [enrolled, setEnrolled] = useState(false);
+  const [courseProgress, setCourseProgress] = useState<CourseProgress | null>(null);
   const { user, isAuthenticated } = useAuthStore();
 
   useEffect(() => {
@@ -32,6 +33,14 @@ export default function CourseDetail() {
       if (isAuthenticated) {
         const enrollment = await courseApi.getEnrollment(id);
         setEnrolled(!!enrollment);
+        if (enrollment) {
+          try {
+            const progressData = await courseApi.getCourseProgress(id);
+            setCourseProgress(progressData);
+          } catch {
+            // 未报名等情况忽略
+          }
+        }
       }
     } finally {
       setLoading(false);
@@ -45,7 +54,7 @@ export default function CourseDetail() {
       return;
     }
     if (!id) return;
-    
+
     Modal.confirm({
       title: '确认报名',
       content: course?.type === CourseType.PAID
@@ -55,6 +64,8 @@ export default function CourseDetail() {
         try {
           await courseApi.enroll(id);
           setEnrolled(true);
+          const progressData = await courseApi.getCourseProgress(id);
+          setCourseProgress(progressData);
           message.success('报名成功');
         } catch (error: any) {
           message.error(error.response?.data?.message || '报名失败');
@@ -65,9 +76,14 @@ export default function CourseDetail() {
 
   const handlePlayLesson = (lesson: CourseLesson) => {
     if (lesson.isLive) {
+      // 直播课时入口保持不变
       navigate(`/live/${lesson.id}`);
-    } else if (lesson.videoUrl) {
+    } else if (isTeacher) {
+      // 教师课程管理视角保持原行为
       message.info('播放视频');
+    } else if (lesson.videoUrl) {
+      // 录播学习页（断点续播 + 课时完成）
+      navigate(`/lessons/${lesson.id}`);
     } else {
       message.info('暂无视频');
     }
@@ -82,6 +98,33 @@ export default function CourseDetail() {
   }
 
   const isTeacher = user?.id === course.teacherId;
+  const progressMap = new Map(
+    (courseProgress?.lessons || []).map((p) => [p.lessonId, p]),
+  );
+  const overallProgress = courseProgress?.enrollment.progress ?? 0;
+  const courseCompleted = courseProgress?.enrollment.status === 'completed';
+
+  const renderLessonDescription = (lesson: CourseLesson) => {
+    const p = progressMap.get(lesson.id);
+    return (
+      <Space direction="vertical" size={2} style={{ width: '100%' }}>
+        <Text type="secondary">{lesson.duration} 分钟</Text>
+        {enrolled && !lesson.isLive && p && (
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            续播至 {Math.floor(p.position)}s{p.duration ? ` / ${Math.floor(p.duration)}s` : ''}
+          </Text>
+        )}
+        {enrolled && !lesson.isLive && p && p.duration > 0 && (
+          <Progress
+            percent={Math.min(100, Number(((p.position / p.duration) * 100).toFixed(1)))}
+            size="small"
+            status={p.completed ? 'success' : 'active'}
+            style={{ maxWidth: 240, marginBottom: 0 }}
+          />
+        )}
+      </Space>
+    );
+  };
 
   return (
     <div>
@@ -131,9 +174,18 @@ export default function CourseDetail() {
                       </Button>
                     </Space>
                   ) : enrolled ? (
-                    <Button type="primary" size="large">
-                      已报名
-                    </Button>
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      <Button type="primary" size="large">
+                        已报名
+                      </Button>
+                      <div style={{ width: 260 }}>
+                        <Progress
+                          percent={Number(overallProgress.toFixed(1))}
+                          status={courseCompleted ? 'success' : 'active'}
+                          format={(v) => (courseCompleted ? '已学完' : `已学 ${v}%`)}
+                        />
+                      </div>
+                    </Space>
                   ) : (
                     <Button type="primary" size="large" onClick={handleEnroll}>
                       立即报名
@@ -155,6 +207,11 @@ export default function CourseDetail() {
               <Descriptions.Item label="课程类型">
                 {course.type === CourseType.PAID ? '付费' : '免费'}
               </Descriptions.Item>
+              {enrolled && (
+                <Descriptions.Item label="我的进度">
+                  {courseCompleted ? '已完成全部课时' : `${overallProgress.toFixed(1)}%`}
+                </Descriptions.Item>
+              )}
             </Descriptions>
           </Card>
         </Col>
@@ -165,38 +222,48 @@ export default function CourseDetail() {
           itemLayout="horizontal"
           dataSource={course.lessons || []}
           locale={{ emptyText: '暂无课时' }}
-          renderItem={(lesson, index) => (
-            <List.Item
-              actions={
-                enrolled || isTeacher
-                  ? [
-                      <Button
-                        type="link"
-                        icon={<PlayCircleOutlined />}
-                        onClick={() => handlePlayLesson(lesson)}
-                      >
-                        {lesson.isLive ? '进入直播' : '观看视频'}
-                      </Button>,
-                    ]
-                  : []
-              }
-            >
-              <List.Item.Meta
-                avatar={
-                  <Avatar style={{ background: '#1890ff' }}>
-                    {index + 1}
-                  </Avatar>
+          renderItem={(lesson, index) => {
+            const p = progressMap.get(lesson.id);
+            return (
+              <List.Item
+                actions={
+                  enrolled || isTeacher
+                    ? [
+                        <Button
+                          type="link"
+                          icon={<PlayCircleOutlined />}
+                          onClick={() => handlePlayLesson(lesson)}
+                        >
+                          {lesson.isLive ? '进入直播' : p?.completed ? '再次观看' : '观看视频'}
+                        </Button>,
+                      ]
+                    : []
                 }
-                title={
-                  <Space>
-                    {lesson.title}
-                    {lesson.isLive && <Tag color="red">直播</Tag>}
-                  </Space>
-                }
-                description={`${lesson.duration} 分钟`}
-              />
-            </List.Item>
-          )}
+              >
+                <List.Item.Meta
+                  avatar={
+                    <Avatar
+                      style={{ background: p?.completed ? '#52c41a' : '#1890ff' }}
+                      icon={p?.completed ? <CheckCircleFilled /> : undefined}
+                    >
+                      {p?.completed ? undefined : index + 1}
+                    </Avatar>
+                  }
+                  title={
+                    <Space>
+                      {lesson.title}
+                      {lesson.isLive && <Tag color="red">直播</Tag>}
+                      {!lesson.isLive && p?.completed && <Tag color="success">已完成</Tag>}
+                      {!lesson.isLive && enrolled && p && !p.completed && p.position > 0 && (
+                        <Tag color="processing">学习中</Tag>
+                      )}
+                    </Space>
+                  }
+                  description={renderLessonDescription(lesson)}
+                />
+              </List.Item>
+            );
+          }}
         />
       </Card>
     </div>

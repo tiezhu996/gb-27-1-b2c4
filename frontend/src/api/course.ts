@@ -1,5 +1,5 @@
 import { api } from './index';
-import { Course, CourseLesson, CourseEnrollment, CourseType } from '@/types/course';
+import { Course, CourseLesson, CourseEnrollment, CourseProgress, LessonProgress, CourseType } from '@/types/course';
 
 export const courseApi = {
   list: (params?: { category?: string; tag?: string; type?: CourseType; keyword?: string }) =>
@@ -14,4 +14,10 @@ export const courseApi = {
   createLesson: (courseId: string, data: Partial<CourseLesson>) =>
     api.post<CourseLesson>(`/courses/${courseId}/lessons`, data).then(res => res.data),
   getLesson: (lessonId: string) => api.get<CourseLesson>(`/courses/lessons/${lessonId}`).then(res => res.data),
+  getCourseProgress: (courseId: string) =>
+    api.get<CourseProgress>(`/courses/${courseId}/progress`).then(res => res.data),
+  getLessonProgress: (lessonId: string) =>
+    api.get<LessonProgress | null>(`/courses/lessons/${lessonId}/progress`).then(res => res.data),
+  reportLessonProgress: (lessonId: string, data: { position: number; duration: number }) =>
+    api.post<LessonProgress>(`/courses/lessons/${lessonId}/progress`, data).then(res => res.data),
 };

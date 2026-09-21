@@ -10,6 +10,7 @@ import CourseDetail from './pages/CourseDetail';
 import MyCourses from './pages/MyCourses';
 import CreateCourse from './pages/CreateCourse';
 import LiveClass from './pages/LiveClass';
+import LessonPlayer from './pages/LessonPlayer';
 import Assignment from './pages/Assignment';
 import Statistics from './pages/Statistics';
 import { useAuthStore } from './store/auth';
@@ -83,6 +84,14 @@ function App() {
                 element={
                   <PrivateRoute>
                     <LiveClass />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/lessons/:id"
+                element={
+                  <PrivateRoute>
+                    <LessonPlayer />
                   </PrivateRoute>
                 }
               />

@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Param, Body, UseGuards, Request, Query } fr
 import { CoursesService } from './courses.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CourseType } from '../../common/entities/course.entity';
+import { ReportProgressDto } from './dto/report-progress.dto';
 
 @Controller('courses')
 export class CoursesController {
@@ -56,6 +57,28 @@ export class CoursesController {
   @Get(':id/enrollment')
   getEnrollment(@Param('id') courseId: string, @Request() req) {
     return this.coursesService.getEnrollment(req.user.id, courseId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/progress')
+  getCourseProgress(@Param('id') courseId: string, @Request() req) {
+    return this.coursesService.getCourseProgress(req.user.id, courseId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('lessons/:lessonId/progress')
+  reportLessonProgress(
+    @Param('lessonId') lessonId: string,
+    @Body() body: ReportProgressDto,
+    @Request() req,
+  ) {
+    return this.coursesService.reportProgress(req.user.id, req.user.role, lessonId, body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('lessons/:lessonId/progress')
+  getLessonProgress(@Param('lessonId') lessonId: string, @Request() req) {
+    return this.coursesService.getLessonProgress(req.user.id, lessonId);
   }
 
   @UseGuards(JwtAuthGuard)
